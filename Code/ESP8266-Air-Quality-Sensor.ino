@@ -3,7 +3,7 @@
  * https://www.george-smart.co.uk
  *
  * First Release: 30/04/2019
- * This Release:  04/02/2021
+ * This Release:  07/04/2021
  * 
  * Air Quality Monitor
  **/
@@ -74,7 +74,7 @@ int fan_busy = 0;
 
 void setup() {
   Serial.begin(115200);
-  //wifi_set_macaddr(0, const_cast<uint8*>(mac)); // override the default MAC address
+  wifi_set_macaddr(0, const_cast<uint8*>(mac)); // override the default MAC address
 
   pinMode(led, OUTPUT);
   digitalWrite(led, LOW);
@@ -129,8 +129,11 @@ void setup() {
   
   // Wait for connection
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    digitalWrite(led, LOW);
+    delay(250);
+    digitalWrite(led, HIGH);
     Serial.print(".");
+    delay(250);
   }
 
   Serial.println("");
@@ -140,7 +143,7 @@ void setup() {
   Serial.println(WiFi.localIP());
   
   if (MDNS.begin(DEVICENAME)) {
-    Serial.println("MDNS responder started");
+    Serial.println("MDNS started");
   }  
 
   Wifi_Logo_Splash("DHCP IP: " + String(WiFi.localIP().toString()));
@@ -178,7 +181,7 @@ void loop() {
     digitalWrite(FANPIN, HIGH);
     UserScreen();
     ccs811_calibrate(); // dont use: https://github.com/adafruit/Adafruit_CCS811/issues/13 - works better with it in still?!
-    delay(2000);
+    Sdelay(2000);
     
     sensor_busy++;
     UserScreen();
@@ -205,10 +208,18 @@ void loop() {
       tvoc = 0.0;
       pres = 0.0;
     }
-    delay(100);
+    Sdelay(100);
     sensor_busy--;
     digitalWrite(FANPIN, LOW);
     fan_busy--;
+  }
+}
+
+void Sdelay(unsigned long t) {
+  unsigned long start_time = millis();
+  while (millis() < (start_time + t - 2)) {
+    UserScreen();
+    delay(2);
   }
 }
 
@@ -288,9 +299,20 @@ int UpdateThingSpeak() {
 
 void ccs811_calibrate() {
   while(!ccs.available());
+  digitalWrite(FANPIN, HIGH);
+  Sdelay(2000);
   float temp = ccs.calculateTemperature();
-  ccs.setTempOffset(temp - 25.0); // maybe this should use the DHT11 temperature instead of simply 25C?
-  Serial.println("CCS811 sensor calibrated.");
+  float realt = dht.readTemperature();
+  realt = dht.readTemperature();
+  realt = dht.readTemperature(); // get nice fresh reading
+  realt = dht.readTemperature();
+  
+  //ccs.setTempOffset(temp - 25.0); // maybe this should use the DHT11 temperature instead of simply 25C?
+  ccs.setTempOffset(temp - realt); // maybe this should use the DHT11 temperature instead of simply 25C?
+  Serial.print("CCS811 sensor calibrated at ");
+  Serial.print(realt);
+  Serial.println("C");
+  digitalWrite(FANPIN, LOW);
 }
 
 void handleTEMP() {
